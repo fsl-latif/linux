@@ -239,7 +239,7 @@ struct ipoib_cm_tx {
 	struct net_device   *dev;
 	struct ipoib_neigh  *neigh;
 	struct ipoib_path   *path;
-	struct ipoib_cm_tx_buf *tx_ring;
+	struct ipoib_tx_buf *tx_ring;
 	unsigned	     tx_head;
 	unsigned	     tx_tail;
 	unsigned long	     flags;
@@ -503,6 +503,12 @@ int ipoib_mcast_stop_thread(struct net_device *dev);
 
 void ipoib_mcast_dev_down(struct net_device *dev);
 void ipoib_mcast_dev_flush(struct net_device *dev);
+
+int ipoib_dma_map_tx(struct ib_device *ca, struct ipoib_tx_buf *tx_req);
+void ipoib_dma_unmap_tx(struct ipoib_dev_priv *priv,
+			struct ipoib_tx_buf *tx_req);
+inline void ipoib_build_sge(struct ipoib_dev_priv *priv,
+			    struct ipoib_tx_buf *tx_req);
 
 #ifdef CONFIG_INFINIBAND_IPOIB_DEBUG
 struct ipoib_mcast_iter *ipoib_mcast_iter_init(struct net_device *dev);
