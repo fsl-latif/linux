@@ -6188,6 +6188,7 @@ R:     Chien Tin Tung <chien.tin.tung@intel.com>
 R:     Mustafa Ismail <mustafa.ismail@intel.com>
 R:     Shiraz Saleem <shiraz.saleem@intel.com>
 R:     Tatyana Nikolova <tatyana.e.nikolova@intel.com>
+R:     Henry Orosco <henry.orosco@intel.com>
 L:     linux-rdma@vger.kernel.org
 S:     Supported
 F:     drivers/infiniband/hw/i40iw/
