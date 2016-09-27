@@ -964,7 +964,7 @@ err_drop:
 }
 
 static void unicast_arp_send(struct sk_buff *skb, struct net_device *dev,
-			     struct ipoib_cb *cb)
+			     struct ipoib_dest_header *dest)
 {
 	struct ipoib_dev_priv *priv = netdev_priv(dev);
 	struct ipoib_path *path;
@@ -972,12 +972,12 @@ static void unicast_arp_send(struct sk_buff *skb, struct net_device *dev,
 
 	spin_lock_irqsave(&priv->lock, flags);
 
-	path = __path_find(dev, cb->hwaddr + 4);
+	path = __path_find(dev, dest->hwaddr + 4);
 	if (!path || !path->valid) {
 		int new_path = 0;
 
 		if (!path) {
-			path = path_rec_create(dev, cb->hwaddr + 4);
+			path = path_rec_create(dev, dest->hwaddr + 4);
 			new_path = 1;
 		}
 		if (path) {
@@ -1009,7 +1009,7 @@ static void unicast_arp_send(struct sk_buff *skb, struct net_device *dev,
 			  be16_to_cpu(path->pathrec.dlid));
 
 		spin_unlock_irqrestore(&priv->lock, flags);
-		ipoib_send(dev, skb, path->ah, IPOIB_QPN(cb->hwaddr));
+		ipoib_send(dev, skb, path->ah, IPOIB_QPN(dest->hwaddr));
 		return;
 	} else if ((path->query || !path_rec_start(dev, path)) &&
 		   skb_queue_len(&path->queue) < IPOIB_MAX_PATH_REC_QUEUE) {
@@ -1026,13 +1026,14 @@ static int ipoib_start_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct ipoib_dev_priv *priv = netdev_priv(dev);
 	struct ipoib_neigh *neigh;
-	struct ipoib_cb *cb = ipoib_skb_cb(skb);
+	struct ipoib_dest_header *dest;
 	struct ipoib_header *header;
 	unsigned long flags;
 
+	dest = (struct ipoib_dest_header *) skb_pull(skb, sizeof *dest);
 	header = (struct ipoib_header *) skb->data;
 
-	if (unlikely(cb->hwaddr[4] == 0xff)) {
+	if (unlikely(dest->hwaddr[4] == 0xff)) {
 		/* multicast, arrange "if" according to probability */
 		if ((header->proto != htons(ETH_P_IP)) &&
 		    (header->proto != htons(ETH_P_IPV6)) &&
@@ -1045,13 +1046,13 @@ static int ipoib_start_xmit(struct sk_buff *skb, struct net_device *dev)
 			return NETDEV_TX_OK;
 		}
 		/* Add in the P_Key for multicast*/
-		cb->hwaddr[8] = (priv->pkey >> 8) & 0xff;
-		cb->hwaddr[9] = priv->pkey & 0xff;
+		dest->hwaddr[8] = (priv->pkey >> 8) & 0xff;
+		dest->hwaddr[9] = priv->pkey & 0xff;
 
-		neigh = ipoib_neigh_get(dev, cb->hwaddr);
+		neigh = ipoib_neigh_get(dev, dest->hwaddr);
 		if (likely(neigh))
 			goto send_using_neigh;
-		ipoib_mcast_send(dev, cb->hwaddr, skb);
+		ipoib_mcast_send(dev, dest->hwaddr, skb);
 		return NETDEV_TX_OK;
 	}
 
@@ -1060,16 +1061,16 @@ static int ipoib_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	case htons(ETH_P_IP):
 	case htons(ETH_P_IPV6):
 	case htons(ETH_P_TIPC):
-		neigh = ipoib_neigh_get(dev, cb->hwaddr);
+		neigh = ipoib_neigh_get(dev, dest->hwaddr);
 		if (unlikely(!neigh)) {
-			neigh_add_path(skb, cb->hwaddr, dev);
+			neigh_add_path(skb, dest->hwaddr, dev);
 			return NETDEV_TX_OK;
 		}
 		break;
 	case htons(ETH_P_ARP):
 	case htons(ETH_P_RARP):
 		/* for unicast ARP and RARP should always perform path find */
-		unicast_arp_send(skb, dev, cb);
+		unicast_arp_send(skb, dev, dest);
 		return NETDEV_TX_OK;
 	default:
 		/* ethertype not supported by IPoIB */
@@ -1086,7 +1087,7 @@ send_using_neigh:
 			goto unref;
 		}
 	} else if (neigh->ah) {
-		ipoib_send(dev, skb, neigh->ah, IPOIB_QPN(cb->hwaddr));
+		ipoib_send(dev, skb, neigh->ah, IPOIB_QPN(dest->hwaddr));
 		goto unref;
 	}
 
@@ -1123,20 +1124,31 @@ static int ipoib_hard_header(struct sk_buff *skb,
 			     const void *daddr, const void *saddr, unsigned len)
 {
 	struct ipoib_header *header;
-	struct ipoib_cb *cb = ipoib_skb_cb(skb);
+	struct ipoib_dest_header *dest;
 
+	/*
+	 * We *must* push our real header first as it will stay all the
+	 * way through transmission.  Our dest header gets skb_pull'ed
+	 * before we send and needs to not break our header stack
+	 */
 	header = (struct ipoib_header *) skb_push(skb, sizeof *header);
+	dest = (struct ipoib_dest_header *) skb_push(skb, sizeof *dest);
 
 	header->proto = htons(type);
 	header->reserved = 0;
 
 	/*
-	 * we don't rely on dst_entry structure,  always stuff the
-	 * destination address into skb->cb so we can figure out where
-	 * to send the packet later.
+	 * We stuff the destination address into the skb headers.  Prior
+	 * to send, we pop it back off and use it to find our correct
+	 * neighbor.
 	 */
-	memcpy(cb->hwaddr, daddr, INFINIBAND_ALEN);
+	memcpy(dest->hwaddr, daddr, INFINIBAND_ALEN);
 
+	/*
+	 * We lie here intentionally.  We know we'll pull the address back
+	 * off, so we only want the generic header that will stay as the
+	 * accounted size.
+	 */
 	return sizeof *header;
 }
 

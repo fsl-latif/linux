@@ -134,16 +134,17 @@ struct ipoib_header {
 	u16	reserved;
 };
 
-struct ipoib_cb {
-	struct qdisc_skb_cb	qdisc_cb;
+struct ipoib_dest_header {
 	u8			hwaddr[INFINIBAND_ALEN];
 };
 
+/*
 static inline struct ipoib_cb *ipoib_skb_cb(const struct sk_buff *skb)
 {
 	BUILD_BUG_ON(sizeof(skb->cb) < sizeof(struct ipoib_cb));
 	return (struct ipoib_cb *)skb->cb;
 }
+*/
 
 /* Used for all multicast joins (broadcast, IPv4 mcast and IPv6 mcast) */
 struct ipoib_mcast {
