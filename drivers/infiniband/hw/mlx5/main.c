@@ -54,7 +54,6 @@
 #include <linux/in.h>
 #include <linux/etherdevice.h>
 #include <linux/mlx5/fs.h>
-#include "user.h"
 #include "mlx5_ib.h"
 
 #define DRIVER_NAME "mlx5_ib"
@@ -428,7 +427,7 @@ static int mlx5_query_node_guid(struct mlx5_ib_dev *dev,
 }
 
 struct mlx5_reg_node_desc {
-	u8	desc[64];
+	u8	desc[IB_DEVICE_NODE_DESC_MAX];
 };
 
 static int mlx5_query_node_desc(struct mlx5_ib_dev *dev, char *node_desc)
@@ -845,13 +844,13 @@ static int mlx5_ib_modify_device(struct ib_device *ibdev, int mask,
 	 * If possible, pass node desc to FW, so it can generate
 	 * a 144 trap.  If cmd fails, just ignore.
 	 */
-	memcpy(&in, props->node_desc, 64);
+	memcpy(&in, props->node_desc, IB_DEVICE_NODE_DESC_MAX);
 	err = mlx5_core_access_reg(dev->mdev, &in, sizeof(in), &out,
 				   sizeof(out), MLX5_REG_NODE_DESC, 0, 1);
 	if (err)
 		return err;
 
-	memcpy(ibdev->node_desc, props->node_desc, 64);
+	memcpy(ibdev->node_desc, props->node_desc, IB_DEVICE_NODE_DESC_MAX);
 
 	return err;
 }
