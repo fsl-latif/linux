@@ -143,6 +143,7 @@ struct mlx5_ib_pd {
 #define MLX5_IB_FLOW_LEFTOVERS_PRIO	(MLX5_IB_FLOW_MCAST_PRIO + 1)
 
 #define MLX5_IB_NUM_FLOW_FT		(MLX5_IB_FLOW_LEFTOVERS_PRIO + 1)
+#define MLX5_IB_NUM_SNIFFER_FTS		2
 struct mlx5_ib_flow_prio {
 	struct mlx5_flow_table		*flow_table;
 	unsigned int			refcount;
@@ -151,12 +152,14 @@ struct mlx5_ib_flow_prio {
 struct mlx5_ib_flow_handler {
 	struct list_head		list;
 	struct ib_flow			ibflow;
-	unsigned int			prio;
+	struct mlx5_ib_flow_prio	*prio;
 	struct mlx5_flow_rule	*rule;
 };
 
 struct mlx5_ib_flow_db {
 	struct mlx5_ib_flow_prio	prios[MLX5_IB_NUM_FLOW_FT];
+	struct mlx5_ib_flow_prio	sniffer[MLX5_IB_NUM_SNIFFER_FTS];
+	struct mlx5_flow_table		*lag_demux_ft;
 	/* Protect flow steering bypass flow tables
 	 * when add/del flow rules.
 	 * only single add/removal of flow steering rule could be done
@@ -226,7 +229,7 @@ struct mlx5_ib_wq {
 
 struct mlx5_ib_rwq {
 	struct ib_wq		ibwq;
-	u32			rqn;
+	struct mlx5_core_qp	core_qp;
 	u32			rq_num_pas;
 	u32			log_rq_stride;
 	u32			log_rq_size;
@@ -603,6 +606,7 @@ struct mlx5_roce {
 	rwlock_t		netdev_lock;
 	struct net_device	*netdev;
 	struct notifier_block	nb;
+	atomic_t		next_port;
 };
 
 struct mlx5_ib_dev {
@@ -661,6 +665,11 @@ static inline struct mlx5_ib_cq *to_mcq(struct ib_cq *ibcq)
 static inline struct mlx5_ib_qp *to_mibqp(struct mlx5_core_qp *mqp)
 {
 	return container_of(mqp, struct mlx5_ib_qp_base, mqp)->container_mibqp;
+}
+
+static inline struct mlx5_ib_rwq *to_mibrwq(struct mlx5_core_qp *core_qp)
+{
+	return container_of(core_qp, struct mlx5_ib_rwq, core_qp);
 }
 
 static inline struct mlx5_ib_mr *to_mibmr(struct mlx5_core_mkey *mmkey)
